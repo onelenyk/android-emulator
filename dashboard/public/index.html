@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Android Emulator Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #a5b4fc;
+    }
+
+    header h1 svg { opacity: 0.8; }
+
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: #13151f;
+      border-right: 1px solid #2d3148;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 14px 16px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .badge {
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+
+    .emulator-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+    }
+
+    .emulator-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+
+    .emulator-item:hover { background: #1e2235; }
+    .emulator-item.active { background: #1e2a4a; }
+
+    .emulator-item-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.running { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+    .status-dot.exited  { background: #ef4444; }
+    .status-dot.created { background: #eab308; }
+
+    .emulator-name {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #cbd5e1;
+    }
+
+    .stop-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #475569;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+    .stop-btn:hover { color: #ef4444; background: #2d1515; }
+
+    .empty-list {
+      padding: 20px 16px;
+      font-size: 13px;
+      color: #475569;
+      text-align: center;
+    }
+
+    .launch-btn {
+      margin: 10px 8px 14px;
+      padding: 9px;
+      background: #3730a3;
+      border: none;
+      border-radius: 8px;
+      color: #e0e7ff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .launch-btn:hover { background: #4338ca; }
+
+    /* ── Main panel ── */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #0f1117;
+    }
+
+    .main-toolbar {
+      padding: 10px 20px;
+      border-bottom: 1px solid #2d3148;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .main-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+
+    .adb-cmd {
+      margin-left: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      padding: 5px 10px;
+      color: #7dd3fc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .copy-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #64748b;
+      font-size: 13px;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .copy-btn:hover { color: #a5b4fc; }
+
+    .vnc-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .vnc-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: #334155;
+    }
+
+    .placeholder svg { opacity: 0.3; }
+    .placeholder p { font-size: 14px; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(2px);
+    }
+    .modal-overlay.hidden { display: none; }
+
+    .modal {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 24px;
+      width: 340px;
+    }
+
+    .modal h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #e2e8f0;
+    }
+
+    .form-group { margin-bottom: 16px; }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    .form-group select {
+      width: 100%;
+      padding: 9px 12px;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+    .form-group select:focus { border-color: #4338ca; }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .btn-secondary {
+      padding: 8px 16px;
+      background: none;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #94a3b8;
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-secondary:hover { border-color: #475569; color: #e2e8f0; }
+
+    .btn-primary {
+      padding: 8px 20px;
+      background: #3730a3;
+      border: none;
+      border-radius: 8px;
+      color: #e0e7ff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-primary:disabled { background: #1e2235; color: #475569; cursor: not-allowed; }
+
+    .modal-error {
+      font-size: 12px;
+      color: #f87171;
+      margin-top: 10px;
+      min-height: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="2">
+      <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>
+    </svg>
+    Android Emulator Dashboard
+  </h1>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      Emulators
+      <span class="badge" id="count">0</span>
+    </div>
+    <div class="emulator-list" id="emulator-list">
+      <div class="empty-list">No emulators running</div>
+    </div>
+    <button class="launch-btn" id="launch-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      Launch Emulator
+    </button>
+  </aside>
+
+  <main class="main">
+    <div class="main-toolbar" id="toolbar">
+      <span class="main-title" id="main-title">Select an emulator</span>
+      <div class="adb-cmd" id="adb-cmd" style="display:none">
+        <span id="adb-text"></span>
+        <button class="copy-btn" id="copy-btn" title="Copy">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="vnc-wrapper">
+      <div class="placeholder" id="placeholder">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>
+        </svg>
+        <p>No emulator selected</p>
+      </div>
+      <iframe class="vnc-iframe" id="vnc-frame" style="display:none" title="Android Emulator Screen" allow="fullscreen"></iframe>
+    </div>
+  </main>
+</div>
+
+<!-- Launch Modal -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <h2>Launch Android Emulator</h2>
+    <div class="form-group">
+      <label for="version-select">Android Version</label>
+      <select id="version-select"></select>
+    </div>
+    <div class="modal-error" id="modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="cancel-btn">Cancel</button>
+      <button class="btn-primary" id="confirm-btn">Launch</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

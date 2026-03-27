@@ -1,0 +1,13 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - HOST_IP=${HOST_IP}
+      - NOVNC_PORT_START=${NOVNC_PORT_START:-6080}
+      - ADB_PORT_START=${ADB_PORT_START:-5554}
+      - MAX_EMULATORS=${MAX_EMULATORS:-5}
+    restart: unless-stopped

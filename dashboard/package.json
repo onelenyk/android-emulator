@@ -1,0 +1,13 @@
+{
+  "name": "android-emulator-dashboard",
+  "version": "1.0.0",
+  "description": "Web dashboard for managing Android emulators via Docker",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2",
+    "express": "^4.19.2"
+  }
+}

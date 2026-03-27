@@ -14,11 +14,11 @@ const MAX_EMULATORS = parseInt(process.env.MAX_EMULATORS || '5', 10);
 const LABEL = 'android-emulator.managed';
 
 const ANDROID_VERSIONS = {
-  '34': { image: 'budtmo/docker-android:emulator_34.0', name: 'Android 14 (API 34)' },
-  '33': { image: 'budtmo/docker-android:emulator_33.0', name: 'Android 13 (API 33)' },
-  '31': { image: 'budtmo/docker-android:emulator_31.0', name: 'Android 12 (API 31)' },
-  '30': { image: 'budtmo/docker-android:emulator_30.0', name: 'Android 11 (API 30)' },
-  '29': { image: 'budtmo/docker-android:emulator_29.0', name: 'Android 10 (API 29)' },
+  '34': { image: 'budtmo/docker-android:emulator_14.0', name: 'Android 14 (API 34)' },
+  '33': { image: 'budtmo/docker-android:emulator_13.0', name: 'Android 13 (API 33)' },
+  '31': { image: 'budtmo/docker-android:emulator_12.0', name: 'Android 12 (API 31)' },
+  '30': { image: 'budtmo/docker-android:emulator_11.0', name: 'Android 11 (API 30)' },
+  '29': { image: 'budtmo/docker-android:emulator_10.0', name: 'Android 10 (API 29)' },
 };
 
 app.use(express.json());

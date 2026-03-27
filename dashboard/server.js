@@ -102,6 +102,14 @@ app.post('/api/emulators', async (req, res) => {
     const { image, name } = ANDROID_VERSIONS[androidVersion];
     const containerName = `android-${androidVersion}-${Date.now()}`;
 
+    // Pull the image if not already present locally
+    await new Promise((resolve, reject) => {
+      docker.pull(image, (err, stream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (err) => err ? reject(err) : resolve());
+      });
+    });
+
     const container = await docker.createContainer({
       Image: image,
       name: containerName,

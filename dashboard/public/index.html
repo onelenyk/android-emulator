@@ -66,6 +66,12 @@
       justify-content: space-between;
     }
 
+    .sidebar-header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .badge {
       background: #1e2235;
       border: 1px solid #2d3148;
@@ -74,6 +80,20 @@
       font-size: 11px;
       color: #94a3b8;
     }
+
+    .stop-all-btn {
+      background: none;
+      border: 1px solid #3d1515;
+      border-radius: 6px;
+      color: #ef4444;
+      font-size: 10px;
+      padding: 2px 7px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .stop-all-btn:hover { background: #2d1515; }
+    .stop-all-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
     .emulator-list {
       flex: 1;
@@ -102,6 +122,14 @@
       min-width: 0;
     }
 
+    .item-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── Status dots ── */
     .status-dot {
       width: 8px;
       height: 8px;
@@ -109,8 +137,18 @@
       flex-shrink: 0;
     }
     .status-dot.running { background: #22c55e; box-shadow: 0 0 6px #22c55e88; }
+    .status-dot.booting {
+      background: #eab308;
+      box-shadow: 0 0 6px #eab30888;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
     .status-dot.exited  { background: #ef4444; }
     .status-dot.created { background: #eab308; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.35; }
+    }
 
     .emulator-name {
       font-size: 13px;
@@ -133,6 +171,20 @@
       transition: color 0.15s, background 0.15s;
     }
     .stop-btn:hover { color: #ef4444; background: #2d1515; }
+
+    .start-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #475569;
+      font-size: 14px;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 4px;
+      flex-shrink: 0;
+      transition: color 0.15s, background 0.15s;
+    }
+    .start-btn:hover { color: #22c55e; background: #0f2a1a; }
 
     .empty-list {
       padding: 20px 16px;
@@ -253,7 +305,7 @@
       border: 1px solid #2d3148;
       border-radius: 12px;
       padding: 24px;
-      width: 340px;
+      width: 360px;
     }
 
     .modal h2 {
@@ -263,7 +315,7 @@
       color: #e2e8f0;
     }
 
-    .form-group { margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
 
     .form-group label {
       display: block;
@@ -286,6 +338,57 @@
     }
     .form-group select:focus { border-color: #4338ca; }
 
+    /* ── Pull progress ── */
+    .pull-progress {
+      margin-top: 12px;
+      border-top: 1px solid #2d3148;
+      padding-top: 12px;
+    }
+
+    .pull-phase {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 8px;
+    }
+
+    .pull-layers {
+      max-height: 110px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+    }
+
+    .pull-layer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 0;
+      color: #64748b;
+    }
+
+    .pull-layer-id {
+      color: #475569;
+      flex-shrink: 0;
+      width: 75px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pull-layer-status {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .pull-layer-prog {
+      font-size: 10px;
+      color: #64748b;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
     .modal-actions {
       display: flex;
       gap: 10px;
@@ -304,6 +407,7 @@
       transition: border-color 0.15s, color 0.15s;
     }
     .btn-secondary:hover { border-color: #475569; color: #e2e8f0; }
+    .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .btn-primary {
       padding: 8px 20px;
@@ -341,8 +445,11 @@
 <div class="layout">
   <aside class="sidebar">
     <div class="sidebar-header">
-      Emulators
-      <span class="badge" id="count">0</span>
+      <span>Emulators</span>
+      <div class="sidebar-header-right">
+        <button class="stop-all-btn" id="stop-all-btn" disabled>Stop All</button>
+        <span class="badge" id="count">0</span>
+      </div>
     </div>
     <div class="emulator-list" id="emulator-list">
       <div class="empty-list">No emulators running</div>
@@ -387,7 +494,15 @@
       <label for="version-select">Android Version</label>
       <select id="version-select"></select>
     </div>
+    <div class="form-group">
+      <label for="device-select">Device</label>
+      <select id="device-select"></select>
+    </div>
     <div class="modal-error" id="modal-error"></div>
+    <div class="pull-progress" id="pull-progress" style="display:none">
+      <div class="pull-phase" id="pull-phase">Pulling image...</div>
+      <div class="pull-layers" id="pull-layers"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="cancel-btn">Cancel</button>
       <button class="btn-primary" id="confirm-btn">Launch</button>

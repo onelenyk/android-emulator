@@ -11,3 +11,9 @@ services:
       - ADB_PORT_START=${ADB_PORT_START:-5554}
       - MAX_EMULATORS=${MAX_EMULATORS:-5}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/versions"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

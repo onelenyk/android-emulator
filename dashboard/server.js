@@ -269,6 +269,39 @@ app.get('/api/emulators/:id/status', async (req, res) => {
   }
 });
 
+// Stream container logs as SSE
+app.get('/api/emulators/:id/logs', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const container = docker.getContainer(req.params.id);
+
+  container.logs({ follow: true, stdout: true, stderr: true, tail: 200 }, (err, stream) => {
+    if (err) {
+      res.write(`data: ${JSON.stringify({ msg: `Error: ${err.message}` })}\n\n`);
+      res.end();
+      return;
+    }
+
+    const sendChunk = (chunk) => {
+      const lines = chunk.toString()
+        .replace(/\x1b\[[0-9;]*[mGKHF]/g, '')  // strip ANSI codes
+        .replace(/\r/g, '')
+        .split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed) res.write(`data: ${JSON.stringify({ msg: trimmed })}\n\n`);
+      }
+    };
+
+    docker.modem.demuxStream(stream, { write: sendChunk }, { write: sendChunk });
+    stream.on('end', () => res.end());
+    req.on('close', () => stream.destroy());
+  });
+});
+
 // Restart a stopped emulator container
 app.post('/api/emulators/:id/start', async (req, res) => {
   try {

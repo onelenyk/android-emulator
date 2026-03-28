@@ -4,6 +4,7 @@ let emulators = [];
 let selectedId = null;
 let pollTimer = null;
 let currentES = null;
+let logES = null;
 const bootState = new Map();
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,8 @@ const stopAllBtn   = $('stop-all-btn');
 const pullProgress = $('pull-progress');
 const pullPhase    = $('pull-phase');
 const pullLayers   = $('pull-layers');
+const logOutput    = $('log-output');
+const logStatus    = $('log-status');
 
 // ── Helpers ───────────────────────────────────────────────────
 function fmtBytes(n) {
@@ -137,6 +140,40 @@ function renderList() {
   });
 }
 
+// ── Log streaming ─────────────────────────────────────────────
+function appendLog(msg, cls = '') {
+  const line = document.createElement('div');
+  line.className = 'log-line' + (cls ? ' ' + cls : '');
+  line.textContent = msg;
+  logOutput.appendChild(line);
+  logOutput.scrollTop = logOutput.scrollHeight;
+}
+
+function openLogStream(id) {
+  if (logES) { logES.close(); logES = null; }
+  logOutput.innerHTML = '';
+  logStatus.classList.add('active');
+
+  logES = new EventSource(`/api/emulators/${id}/logs`);
+  logES.onmessage = (ev) => {
+    const { msg } = JSON.parse(ev.data);
+    appendLog(msg);
+  };
+  logES.onerror = () => {
+    logStatus.classList.remove('active');
+    logES.close();
+    logES = null;
+  };
+}
+
+function closeLogStream() {
+  if (logES) { logES.close(); logES = null; }
+  logStatus.classList.remove('active');
+  logOutput.innerHTML = '<div class="log-line info">Select an emulator to view logs.</div>';
+}
+
+$('clear-logs-btn').addEventListener('click', () => { logOutput.innerHTML = ''; });
+
 // ── Select / clear emulator ───────────────────────────────────
 function selectEmulator(id) {
   const emulator = emulators.find((e) => e.id === id);
@@ -150,6 +187,7 @@ function selectEmulator(id) {
   vncFrame.style.display    = 'block';
 
   if (vncFrame.src !== emulator.vncUrl) vncFrame.src = emulator.vncUrl;
+  openLogStream(id);
   renderList();
 }
 
@@ -160,6 +198,7 @@ function clearSelection() {
   vncFrame.style.display = 'none';
   vncFrame.src = '';
   placeholder.style.display = 'flex';
+  closeLogStream();
 }
 
 // ── Stop / restart emulators ──────────────────────────────────

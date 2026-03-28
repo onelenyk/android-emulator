@@ -42,17 +42,17 @@ function fmtBytes(n) {
 async function loadVersions() {
   const res = await fetch('/api/versions');
   const versions = await res.json();
-  versionSel.innerHTML = versions
-    .map((v) => `<option value="${v.api}">${v.name}</option>`)
-    .join('');
+  const html = versions.map((v) => `<option value="${v.api}">${v.name}</option>`).join('');
+  versionSel.innerHTML = html;
+  return html;
 }
 
 async function loadDevices() {
   const res = await fetch('/api/devices');
   const devices = await res.json();
-  deviceSel.innerHTML = devices
-    .map((d) => `<option value="${d.id}">${d.label}</option>`)
-    .join('');
+  const html = devices.map((d) => `<option value="${d.id}">${d.label}</option>`).join('');
+  deviceSel.innerHTML = html;
+  return html;
 }
 
 // ── Polling ───────────────────────────────────────────────────
@@ -287,54 +287,7 @@ confirmBtn.addEventListener('click', async () => {
       return;
     }
 
-    // Switch modal to progress view
-    pullProgress.style.display = 'block';
-    pullPhase.textContent = 'Pulling image...';
-    const layerMap = new Map();
-
-    currentES = new EventSource(`/api/emulators/launch-progress/${data.jobId}`);
-
-    currentES.onmessage = (ev) => {
-      const msg = JSON.parse(ev.data);
-
-      if (msg.phase === 'pulling' && msg.id) {
-        let row = layerMap.get(msg.id);
-        if (!row) {
-          row = document.createElement('div');
-          row.className = 'pull-layer';
-          pullLayers.appendChild(row);
-          layerMap.set(msg.id, row);
-          pullLayers.scrollTop = pullLayers.scrollHeight;
-        }
-        const pd = msg.progressDetail || {};
-        const prog = pd.total ? ` ${fmtBytes(pd.current)}/${fmtBytes(pd.total)}` : '';
-        row.innerHTML =
-          `<span class="pull-layer-id">${msg.id.slice(0, 12)}</span>` +
-          `<span class="pull-layer-status">${msg.status}</span>` +
-          `<span class="pull-layer-prog">${prog}</span>`;
-      } else if (msg.phase === 'starting') {
-        pullPhase.textContent = 'Starting container...';
-      } else if (msg.phase === 'done') {
-        currentES.close(); currentES = null;
-        const cId = msg.containerId;
-        closeModal();
-        poll().then(() => selectEmulator(cId));
-      } else if (msg.phase === 'error') {
-        currentES.close(); currentES = null;
-        modalError.textContent = msg.message || 'Launch failed';
-        confirmBtn.disabled = false;
-        cancelBtn.disabled = false;
-        pullProgress.style.display = 'none';
-      }
-    };
-
-    currentES.onerror = () => {
-      currentES.close(); currentES = null;
-      modalError.textContent = 'Connection lost during launch';
-      confirmBtn.disabled = false;
-      cancelBtn.disabled = false;
-      pullProgress.style.display = 'none';
-    };
+    openProgressModal(data.jobId);
 
   } catch (err) {
     modalError.textContent = err.message;
@@ -344,7 +297,210 @@ confirmBtn.addEventListener('click', async () => {
   }
 });
 
+// ── Presets ───────────────────────────────────────────────────
+let presets = [];
+
+const presetsListEl    = $('presets-list');
+const presetsCountEl   = $('presets-count');
+const launchMissingBtn = $('launch-missing-btn');
+const presetModalEl    = $('preset-modal-overlay');
+const presetNameInput  = $('preset-name-input');
+const presetVersionSel = $('preset-version-select');
+const presetDeviceSel  = $('preset-device-select');
+const presetModalError = $('preset-modal-error');
+
+async function loadPresets() {
+  try {
+    const res = await fetch('/api/presets');
+    presets = await res.json();
+    renderPresets();
+  } catch { /* ignore */ }
+}
+
+function renderPresets() {
+  presetsCountEl.textContent = presets.length;
+  const offline = presets.filter((p) => !p.container || p.container.status !== 'running');
+  launchMissingBtn.disabled = offline.length === 0;
+
+  if (presets.length === 0) {
+    presetsListEl.innerHTML = '<div class="empty-list">No presets saved</div>';
+    return;
+  }
+
+  const versionName = (api) => {
+    const v = { '34':'Android 14','33':'Android 13','31':'Android 12','30':'Android 11','29':'Android 10','28':'Android 9' };
+    return v[api] || `API ${api}`;
+  };
+
+  presetsListEl.innerHTML = presets.map((p) => {
+    const running = p.container && p.container.status === 'running';
+    const dotClass = running ? 'running' : (p.container ? p.container.status : 'exited');
+    const actionBtn = running
+      ? `<button class="preset-view-btn" data-id="${p.container.id}" title="Select">View</button>`
+      : `<button class="preset-launch-btn" data-preset="${p.id}" title="Launch">&#9654;</button>`;
+
+    return `
+      <div class="preset-item">
+        <div class="preset-item-left">
+          <span class="status-dot ${dotClass}"></span>
+          <div class="preset-info">
+            <span class="preset-name">${p.name}</span>
+            <span class="preset-sub">${versionName(p.androidVersion)} · ${p.device}</span>
+          </div>
+        </div>
+        <div class="preset-actions">
+          ${actionBtn}
+          <button class="preset-delete-btn" data-preset="${p.id}" title="Delete">&times;</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  presetsListEl.querySelectorAll('.preset-launch-btn').forEach((btn) => {
+    btn.addEventListener('click', () => launchPreset(btn.dataset.preset));
+  });
+
+  presetsListEl.querySelectorAll('.preset-view-btn').forEach((btn) => {
+    btn.addEventListener('click', () => selectEmulator(btn.dataset.id));
+  });
+
+  presetsListEl.querySelectorAll('.preset-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', () => deletePreset(btn.dataset.preset));
+  });
+}
+
+async function launchPreset(presetId) {
+  try {
+    const res = await fetch(`/api/presets/${presetId}/launch`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error); return; }
+    // Reuse the existing SSE progress modal
+    openProgressModal(data.jobId);
+  } catch (err) {
+    alert(`Failed to launch preset: ${err.message}`);
+  }
+}
+
+async function deletePreset(presetId) {
+  await fetch(`/api/presets/${presetId}`, { method: 'DELETE' });
+  await loadPresets();
+}
+
+launchMissingBtn.addEventListener('click', async () => {
+  const offline = presets.filter((p) => !p.container || p.container.status !== 'running');
+  for (const p of offline) {
+    try {
+      const res = await fetch(`/api/presets/${p.id}/launch`, { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        openProgressModal(data.jobId);
+        // small gap between launches to avoid port race
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    } catch { /* ignore individual failures */ }
+  }
+});
+
+// ── Preset modal ──────────────────────────────────────────────
+function openPresetModal() {
+  presetNameInput.value = '';
+  presetModalError.textContent = '';
+  presetModalEl.classList.remove('hidden');
+  presetNameInput.focus();
+}
+
+function closePresetModal() {
+  presetModalEl.classList.add('hidden');
+  presetModalError.textContent = '';
+}
+
+$('add-preset-btn').addEventListener('click', openPresetModal);
+$('preset-cancel-btn').addEventListener('click', closePresetModal);
+presetModalEl.addEventListener('click', (e) => { if (e.target === presetModalEl) closePresetModal(); });
+
+$('preset-save-btn').addEventListener('click', async () => {
+  const name = presetNameInput.value.trim();
+  const androidVersion = presetVersionSel.value;
+  const device = presetDeviceSel.value;
+
+  if (!name) { presetModalError.textContent = 'Name is required'; return; }
+
+  const res = await fetch('/api/presets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, androidVersion, device }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json();
+    presetModalError.textContent = data.error || 'Failed to save';
+    return;
+  }
+
+  closePresetModal();
+  await loadPresets();
+});
+
+// ── SSE progress (shared between launch + preset launch) ──────
+function openProgressModal(jobId) {
+  // Show the launch modal in progress mode
+  pullProgress.style.display = 'block';
+  pullPhase.textContent = 'Pulling image...';
+  pullLayers.innerHTML = '';
+  confirmBtn.disabled = true;
+  cancelBtn.disabled = true;
+  modalError.textContent = '';
+  modalOverlay.classList.remove('hidden');
+
+  const layerMap = new Map();
+
+  currentES = new EventSource(`/api/emulators/launch-progress/${jobId}`);
+
+  currentES.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.phase === 'pulling' && msg.id) {
+      let row = layerMap.get(msg.id);
+      if (!row) {
+        row = document.createElement('div');
+        row.className = 'pull-layer';
+        pullLayers.appendChild(row);
+        layerMap.set(msg.id, row);
+        pullLayers.scrollTop = pullLayers.scrollHeight;
+      }
+      const pd = msg.progressDetail || {};
+      const prog = pd.total ? ` ${fmtBytes(pd.current)}/${fmtBytes(pd.total)}` : '';
+      row.innerHTML =
+        `<span class="pull-layer-id">${msg.id.slice(0, 12)}</span>` +
+        `<span class="pull-layer-status">${msg.status}</span>` +
+        `<span class="pull-layer-prog">${prog}</span>`;
+    } else if (msg.phase === 'starting') {
+      pullPhase.textContent = 'Starting container...';
+    } else if (msg.phase === 'done') {
+      currentES.close(); currentES = null;
+      const cId = msg.containerId;
+      closeModal();
+      poll().then(() => { loadPresets(); selectEmulator(cId); });
+    } else if (msg.phase === 'error') {
+      currentES.close(); currentES = null;
+      modalError.textContent = msg.message || 'Launch failed';
+      confirmBtn.disabled = false;
+      cancelBtn.disabled = false;
+      pullProgress.style.display = 'none';
+    }
+  };
+
+  currentES.onerror = () => {
+    currentES.close(); currentES = null;
+    modalError.textContent = 'Connection lost during launch';
+    confirmBtn.disabled = false;
+    cancelBtn.disabled = false;
+    pullProgress.style.display = 'none';
+  };
+}
+
 // ── Boot ──────────────────────────────────────────────────────
-loadVersions();
-loadDevices();
+loadVersions().then((html) => { presetVersionSel.innerHTML = html; });
+loadDevices().then((html) => { presetDeviceSel.innerHTML = html; });
+loadPresets();
 startPolling();

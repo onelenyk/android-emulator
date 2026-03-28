@@ -152,6 +152,8 @@ app.post('/api/emulators', async (req, res) => {
         emit({ phase: 'starting' });
 
         // Create and start container
+        const volumeName = `android-avd-${containerName}`;
+
         const container = await docker.createContainer({
           Image: image,
           name: containerName,
@@ -166,6 +168,7 @@ app.post('/api/emulators', async (req, res) => {
             'android-emulator.name': name,
             'android-emulator.vnc-port': String(vncPort),
             'android-emulator.adb-port': String(adbPort),
+            'android-emulator.data-volume': volumeName,
           },
           HostConfig: {
             Devices: [{ PathOnHost: '/dev/kvm', PathInContainer: '/dev/kvm', CgroupPermissions: 'rwm' }],
@@ -173,6 +176,14 @@ app.post('/api/emulators', async (req, res) => {
               '6080/tcp': [{ HostPort: String(vncPort) }],
               '5555/tcp': [{ HostPort: String(adbPort) }],
             },
+            Mounts: [
+              {
+                Type: 'volume',
+                Source: volumeName,
+                Target: '/home/androidusr',
+                ReadOnly: false,
+              },
+            ],
           },
           ExposedPorts: { '6080/tcp': {}, '5555/tcp': {} },
         });
@@ -312,12 +323,17 @@ app.post('/api/emulators/:id/start', async (req, res) => {
   }
 });
 
-// Stop and remove an emulator
+// Stop and remove an emulator (and its data volume)
 app.delete('/api/emulators/:id', async (req, res) => {
   try {
     const container = docker.getContainer(req.params.id);
+    const info = await container.inspect();
+    const volumeName = info.Config.Labels['android-emulator.data-volume'];
     try { await container.stop({ t: 5 }); } catch { /* already stopped */ }
     await container.remove();
+    if (volumeName) {
+      try { await docker.getVolume(volumeName).remove(); } catch { /* ignore */ }
+    }
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: err.message });

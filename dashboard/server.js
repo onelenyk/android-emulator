@@ -23,13 +23,15 @@ const ANDROID_VERSIONS = {
   '28': { image: 'budtmo/docker-android:emulator_9.0',  name: 'Android 9 (API 28)'  },
 };
 
+// id must match a valid `avdmanager list device` ID; label is display-only
 const EMULATOR_DEVICES = [
-  'Samsung Galaxy S10',
-  'Pixel 6',
-  'Pixel 4',
-  'Nexus 5X',
-  'OnePlus 9',
-  'Xiaomi Mi 11',
+  { id: 'Nexus 5',    label: 'Nexus 5 (universal)'  },
+  { id: 'Nexus 5X',   label: 'Nexus 5X'              },
+  { id: 'Nexus 6P',   label: 'Nexus 6P'              },
+  { id: 'pixel_2',    label: 'Pixel 2 (API 27+)'     },
+  { id: 'pixel_3a',   label: 'Pixel 3a (API 29+)'    },
+  { id: 'pixel_4',    label: 'Pixel 4 (API 29+)'     },
+  { id: 'Galaxy Nexus', label: 'Galaxy Nexus'         },
 ];
 
 // In-memory store for SSE launch progress jobs
@@ -71,7 +73,7 @@ app.get('/api/versions', (req, res) => {
 
 // List available device types
 app.get('/api/devices', (req, res) => {
-  res.json(EMULATOR_DEVICES);
+  res.json(EMULATOR_DEVICES.map(({ id, label }) => ({ id, label })));
 });
 
 // Launch a new emulator — responds 202 + jobId immediately; pull/start runs in background
@@ -82,7 +84,8 @@ app.post('/api/emulators', async (req, res) => {
     return res.status(400).json({ error: `Unknown Android version: ${androidVersion}` });
   }
 
-  const selectedDevice = EMULATOR_DEVICES.includes(device) ? device : EMULATOR_DEVICES[0];
+  const validIds = EMULATOR_DEVICES.map((d) => d.id);
+  const selectedDevice = (device && validIds.includes(device)) ? device : 'Nexus 5';
 
   try {
     const existing = await docker.listContainers({

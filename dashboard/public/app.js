@@ -51,7 +51,7 @@ async function loadDevices() {
   const res = await fetch('/api/devices');
   const devices = await res.json();
   deviceSel.innerHTML = devices
-    .map((d) => `<option value="${d}">${d}</option>`)
+    .map((d) => `<option value="${d.id}">${d.label}</option>`)
     .join('');
 }
 

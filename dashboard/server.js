@@ -261,8 +261,10 @@ app.get('/api/emulators/:id/status', async (req, res) => {
     }
 
     try {
+      // getprop is an Android command — must be run via adb inside the container.
+      // Each container has exactly one emulator, always reachable at emulator-5554 internally.
       const exec = await container.exec({
-        Cmd: ['sh', '-c', 'getprop sys.boot_completed 2>/dev/null'],
+        Cmd: ['sh', '-c', 'adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null'],
         AttachStdout: true,
         AttachStderr: false,
       });
@@ -272,7 +274,7 @@ app.get('/api/emulators/:id/status', async (req, res) => {
         stream.on('data', (chunk) => { buf += chunk.toString(); });
         stream.on('end', () => resolve(buf));
         stream.on('error', () => resolve(''));
-        setTimeout(() => resolve(buf), 3000);
+        setTimeout(() => resolve(buf), 5000);
       });
       res.json({ status: output.includes('1') ? 'booted' : 'booting' });
     } catch {
